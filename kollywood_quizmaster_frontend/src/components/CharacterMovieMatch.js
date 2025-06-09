@@ -421,10 +421,10 @@ export default function CharacterMovieMatch() {
       </div>
     );
   }
-  // Never display error to block the game; ensure fallback is always used to generate questions.
-  // If after all logic still no questions, forcibly use fallback as a last resort.
+
+  // If no questions loaded, forcibly re-populate state with fallback to start the game seamlessly
   if ((!questions || !questions.length) && !loading) {
-    // Try forcibly fallback in render, in case useEffect logic failed for any reason.
+    // Fallback — assign to state so normal play resumes (restores navigation, score, clues, etc.)
     const FALLBACK_CHAR_MOVIE_POOL = [
       {
         characterName: "Arunachalam",
@@ -547,8 +547,8 @@ export default function CharacterMovieMatch() {
         title: "Aboorva Sagodharargal",
       }
     ];
-    // Build fallback questions structure (identical logic as useEffect).
-    const fallbackShuffled = FALLBACK_CHAR_MOVIE_POOL
+    // Fallback: mimic pool construction as done in useEffect.
+    const fallbackPool = FALLBACK_CHAR_MOVIE_POOL
       .sort(() => 0.5 - Math.random()).slice(0, 10);
     const numQuestions = 5;
     const pairsPerQuestion = 2;
@@ -557,7 +557,7 @@ export default function CharacterMovieMatch() {
     let usedCharacterNames = new Set();
     let usedClues = new Set();
     let questionsArr = [];
-    let availablePairs = [...fallbackShuffled];
+    let availablePairs = [...fallbackPool];
     let maxTries = 18;
     for (let qIdxInner = 0; qIdxInner < numQuestions; qIdxInner++) {
       let cluesForThisRound = [];
@@ -641,11 +641,9 @@ export default function CharacterMovieMatch() {
       if (qItemArray.length < pairsPerQuestion) break;
       questionsArr.push(qItemArray);
     }
-    // Fallback rendering: manually update questions for this render:
-    // NOTE: This does NOT update the state variable for further navigation, but
-    // since we should never be in this fallback more than once, this works.
+
+    // If fallback logic failed too (extremely rare), show error
     if (!questionsArr.length) {
-      // If fallback logic failed too, error: This is extremely unlikely.
       return (
         <div className="container">
           <h2>Error: Unable to start game.</h2>
@@ -653,132 +651,17 @@ export default function CharacterMovieMatch() {
         </div>
       );
     }
-    // Render fallback quiz UI directly:
-    const group = questionsArr[0];
+
+    // Instead of rendering fallback UI directly, assign fallback questions into state and trigger a re-render
+    setQuestions(questionsArr);
+    setError("");
+    setQIdx(0);
+    setScore(0);
+    setDone(false);
+    setClueStates([]);
     return (
-      <div className="container" style={{ maxWidth: 700, marginTop: 44 }}>
-        <BackButton />
-        <div style={{ marginBottom: 12 }}>
-          <span className="subtitle" style={{ color: "#fc03e8" }}>
-            Character-Movie Match: (Fallback Mode)
-          </span>
-        </div>
-        <div style={{
-          background: "#0a0000",
-          color: "#f5f4f0",
-          fontWeight: 600,
-          border: "2px solid #fc03e8",
-          borderRadius: 10,
-          padding: "16px 24px",
-          marginBottom: 20,
-          fontSize: 17
-        }}>
-          <span>
-            Drag the <span style={{ color: "#fc03e8" }}>character clue</span> below onto the correct movie poster!
-          </span>
-          <br />
-          <span style={{ fontSize: 15, color: "#fc03e8" }}>
-            Fallback: Static Kollywood quiz.
-          </span>
-        </div>
-        <div style={{
-          display: "flex",
-          flexDirection: "column",
-          gap: 28,
-          justifyContent: "center"
-        }}>
-          {group.map((qobj, clueIdx) => (
-            <div key={`${qobj.clue}_grp0_clue${clueIdx}`}>
-              <div style={{ display: "flex", justifyContent: "center", marginBottom: 14 }}>
-                <div
-                  style={{
-                    fontSize: 26,
-                    padding: "18px 44px",
-                    background: "#fc03e8",
-                    color: "#fff",
-                    borderRadius: 12,
-                    boxShadow: "0 2px 10px rgba(252,3,232,0.23)",
-                    fontWeight: 700,
-                    userSelect: "none",
-                  }}
-                  aria-label="character clue"
-                >
-                  {qobj.clue}
-                </div>
-              </div>
-              <div
-                style={{
-                  display: "flex",
-                  flexWrap: "wrap",
-                  gap: 22,
-                  justifyContent: "center",
-                  alignItems: "end",
-                  marginBottom: 6,
-                }}
-              >
-                {qobj.options.map((opt, optIdx) => (
-                  <div
-                    key={opt.id}
-                    style={{
-                      border: `3.5px solid #fc03e8`,
-                      borderRadius: 18,
-                      boxShadow: "0 0 13px #fc03e8a0",
-                      width: 136,
-                      marginBottom: 4,
-                      background: "#191a24",
-                      cursor: "pointer",
-                      position: "relative"
-                    }}
-                    aria-label={`Movie poster for ${opt.title}`}
-                  >
-                    <img
-                      src={getTmdbImageUrl(opt.poster, "w342")}
-                      alt={opt.title}
-                      style={{
-                        width: 136,
-                        height: 210,
-                        objectFit: "cover",
-                        borderRadius: 15,
-                        transition: "filter .23s",
-                        userSelect: "none",
-                        pointerEvents: "none"
-                      }}
-                      draggable={false}
-                    />
-                    <div
-                      style={{
-                        fontWeight: 700,
-                        fontSize: 15,
-                        color: "#f5f4f0",
-                        background: "#fc03e8e6",
-                        padding: "5px 5px 3px 5px",
-                        borderRadius: "0 0 14px 14px",
-                        textAlign: "center",
-                        position: "absolute",
-                        width: "122px",
-                        left: 0,
-                        bottom: 0,
-                        margin: "0 7px",
-                      }}
-                    >
-                      {opt.title}
-                    </div>
-                  </div>
-                ))}
-              </div>
-              <div style={{
-                margin: "10px 0 18px 0", minHeight: 32,
-                color: "#f5f4f0",
-                fontWeight: 600,
-                fontSize: 17
-              }}>
-              </div>
-            </div>
-          ))}
-        </div>
-        <div style={{ color: "#fc03e8", fontWeight: 700, marginTop: 12, textAlign: "center" }}>
-          Fallback mode, reload to try again.
-        </div>
+      <div className="container">
+        <h2>Launching fallback quiz…</h2>
       </div>
     );
   }
