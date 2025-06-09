@@ -11,7 +11,6 @@ export default function BlurredPosterQuiz() {
   const [questions, setQuestions] = useState([]);
   const [qIdx, setQIdx] = useState(0);
   const [loading, setLoading] = useState(true);
-  const [clues, setClues] = useState([]);
   const [showClues, setShowClues] = useState([false, false]);
   const [guess, setGuess] = useState("");
   const [feedback, setFeedback] = useState("");
@@ -23,40 +22,58 @@ export default function BlurredPosterQuiz() {
   const navigate = useNavigate();
 
   useEffect(() => {
-    // Fetch 10 random tamil movies as questions
+    // Fetch 10 random tamil movies as questions, get english title and actor
     async function load() {
       setLoading(true);
       try {
         const resp = await fetchTamilMovies({ page: Math.floor(Math.random() * 8) + 1 });
-        // pick 10 unique movies with posters and reasonable titles
+        // pick 10 unique movies with posters and reasonable English titles
         let films = (resp.results || [])
-          .filter(m => m.poster_path && m.title && m.title.length > 2);
+          .filter(m => m.poster_path && (m.title || m.original_title) && ((m.title?.length > 2) || (m.original_title?.length > 2)));
 
         // fallback if <10 results
         while (films.length < 10 && resp.page < resp.total_pages) {
           const nextPage = await fetchTamilMovies({ page: resp.page + 1 });
           films = films.concat(
-            (nextPage.results || []).filter(m => m.poster_path && m.title && m.title.length > 2)
+            (nextPage.results || []).filter(m => m.poster_path && (m.title || m.original_title) && ((m.title?.length > 2) || (m.original_title?.length > 2)))
           );
         }
+        // shuffle and pick 10
         films = films.sort(() => 0.5 - Math.random()).slice(0, 10);
-        // fetch clues for each movie (release year and genre)
-        const filmsWithDetails = await Promise.all(
+        // fetch key info: english title, main actor name for clues
+        const filmsWithClues = await Promise.all(
           films.map(async (m) => {
             const detail = await fetchMovieDetails(m.id);
+            // Get English title
+            // TMDB 'original_title' is usually English for Tamil films listed, or we fallback
+            let engTitle = detail.original_title || m.title || "";
+            // Prefer detail.title if it's English and not just translation.
+            // If both exist and are different, and one is ASCII, use that.
+            if (detail.title && /^[A-Za-z0-9 .,'":!?-]+$/.test(detail.title)) {
+              engTitle = detail.title;
+            } else if (engTitle && /^[A-Za-z0-9 .,'":!?-]+$/.test(engTitle)) {
+              // ok, remains
+            } else if (m.title && /^[A-Za-z0-9 .,'":!?-]+$/.test(m.title)) {
+              engTitle = m.title;
+            }
+            // Get first billed actor
+            let actorName = "";
+            if (detail.credits && detail.credits.cast && detail.credits.cast.length > 0) {
+              actorName = detail.credits.cast[0]?.name || "";
+            }
             return {
               ...m,
-              year: detail.release_date?.split("-")[0],
-              genre: detail.genres?.[0]?.name,
+              engTitle: engTitle,
+              displayTitle: engTitle,
+              actorName: actorName,
             };
           })
         );
-        setQuestions(filmsWithDetails);
+        setQuestions(filmsWithClues);
       } catch {
         setQuestions([]);
       }
       setQIdx(0);
-      setClues([]);
       setShowClues([false, false]);
       setGuess("");
       setFeedback("");
@@ -90,16 +107,29 @@ export default function BlurredPosterQuiz() {
   }
 
   const movie = questions[qIdx];
-  // clues: [release year, genre]
+
+  // Helper to get clue 2: first and middle (rounded down) letter of English movie name
+  function clue2FirstAndMiddleLetters(str) {
+    if (!str || str.length < 2) return str || "";
+    // Ignore whitespace for clue (use letters only)
+    const letters = str.replace(/\s+/g, "");
+    const midIdx = Math.floor((letters.length - 1) / 2);
+    return `${letters[0]}, ${letters[midIdx]}`;
+  }
+
+  // clues: [actor, first & middle letter of English title]
   const cluesArray = [
-    `Year: ${movie.year || "Unknown"}`,
-    `Genre: ${movie.genre || "Unknown"}`,
+    movie.actorName ? `Actor: ${movie.actorName}` : "Actor: Unknown",
+    movie.displayTitle
+      ? `First & Middle Letter: ${clue2FirstAndMiddleLetters(movie.displayTitle)}`
+      : "First & Middle Letter: -",
   ];
 
+  // All comparison uses English title; guessing must match English title
   function submitGuess() {
     if (revealed) return;
     const userGuess = guess.trim().toLowerCase();
-    if (userGuess === movie.title.trim().toLowerCase()) {
+    if (userGuess === (movie.displayTitle || movie.engTitle || "").trim().toLowerCase()) {
       setFeedback("🎉 Correct!");
       setScore(score + 1);
       setRevealed(true);
@@ -114,7 +144,6 @@ export default function BlurredPosterQuiz() {
       setDone(true);
     } else {
       setQIdx(qIdx + 1);
-      setClues([]);
       setShowClues([false, false]);
       setFeedback("");
       setGuess("");
@@ -126,7 +155,7 @@ export default function BlurredPosterQuiz() {
   function revealAnswer() {
     setAnswerShown(true);
     setRevealed(true);
-    setFeedback(`💡 The answer is: ${movie.title}`);
+    setFeedback(`💡 The answer is: ${(movie.displayTitle || movie.engTitle || "")}`);
   }
 
   function handleShowClue(i) {
