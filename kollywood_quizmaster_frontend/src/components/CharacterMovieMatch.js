@@ -7,6 +7,12 @@ import BackButton from "./BackButton";
  * PUBLIC_INTERFACE
  * Character-Movie Match: Drag the character name clue onto the correct movie poster.
  * Features 5 moderate questions per game session.
+ *
+ * **Improved logic:**
+ * - Ensures EACH character-movie pair appears only once per session
+ * - No movie or character clue is reused as a choice or clue in any subsequent round
+ * - No repeating of clues/options within a question
+ * - No poster appears more than once per question/quiz
  */
 export default function CharacterMovieMatch() {
   const [questions, setQuestions] = useState([]);
@@ -17,95 +23,183 @@ export default function CharacterMovieMatch() {
 
   const navigate = useNavigate();
 
-  // Utility: Find N unique clues and options per question (with distinct characters & posters)
+  // Utility: Builds quiz questions with fully unique character-movie pairs and distractors across the whole session
   useEffect(() => {
     async function load() {
-      // Pool of movies with character info
-      let poolWithChars = [];
       setQuestions([]);
       setQIdx(0);
       setScore(0);
       setDone(false);
 
-      // Get up to 14 random Tamil movies with poster and at least 1 valid character
-      const resp = await fetchTamilMovies({ page: Math.floor(Math.random() * 7) + 2 });
-      let movies = (resp.results || []).filter(m => m.id && m.title && m.poster_path);
-      for (const film of movies.slice(0, 14)) {
+      // Step 1: Build a big flat pool of unique character-movie pairs from many movies
+      let charMoviePool = [];
+      let checkedMovieIds = new Set();
+      let tries = 0;
+      // Aim for 18-24 movies
+      for (let page = 1; page < 7 && charMoviePool.length < 20 && tries < 70; page++, tries++) {
         try {
-          const details = await fetchMovieDetails(film.id);
-          const cast = details.credits?.cast?.filter(c => !!c.character) || [];
-          // Only those with decent character names and at least 1 known character (ignore "Self")
-          const chars = cast
-            .map(c => c.character)
-            .filter(ch => ch.length > 1 && !/^himself|herself|themselves|self$/i.test(ch));
-          if (chars.length > 0) {
-            poolWithChars.push({
-              movieId: film.id,
-              poster: film.poster_path,
-              title: film.title,
-              characterNames: chars,
-            });
+          const resp = await fetchTamilMovies({ page: (Math.floor(Math.random() * 7) + 1) });
+          let movies = (resp.results || []).filter(m => m.id && m.title && m.poster_path);
+          for (const film of movies) {
+            if (checkedMovieIds.has(film.id)) continue;
+            checkedMovieIds.add(film.id);
+            try {
+              const details = await fetchMovieDetails(film.id);
+              const cast = (details.credits?.cast || []).filter(c => !!c.character);
+              // Only characters with ok names, not boring names like "Self"
+              const chars = cast
+                .map(c => c.character)
+                .filter(ch =>
+                  ch.length > 1 &&
+                  !/^himself|herself|themselves|self|guest|appearance|man|woman|boy|girl$/i.test(
+                    ch.trim()
+                  )
+                );
+              for (const ch of chars) {
+                if (ch.length < 2) continue;
+                // Pair each unique character+movie only once
+                if (
+                  !charMoviePool.find(
+                    e => e.movieId === film.id && e.characterName.toLowerCase() === ch.toLowerCase()
+                  )
+                ) {
+                  charMoviePool.push({
+                    characterName: ch,
+                    movieId: film.id,
+                    poster: film.poster_path,
+                    title: film.title,
+                  });
+                }
+                if (charMoviePool.length >= 20) break;
+              }
+            } catch { }
+            if (charMoviePool.length >= 20) break;
           }
-        } catch {}
-        if (poolWithChars.length > 6) break;
+        } catch { }
+        if (charMoviePool.length >= 20) break;
       }
 
-      // Each "question" will consist of 2 unique character-movie pairs, each with its own options (1 correct + 2 unique decoys)
-      const pairsPerQuestion = 2;
-      const questionsArr = [];
-      for (let k = 0; k < 5 && poolWithChars.length >= pairsPerQuestion + 2; k++) {
-        // Pick N unique real movies (no repeats per question)
-        let chosenMovies = [];
-        let blacklist = new Set();
-        // Shuffle pool for fair sampling
-        const shuffled = [...poolWithChars].sort(() => 0.5 - Math.random());
-        for (let i = 0, tryCt = 0; (chosenMovies.length < pairsPerQuestion && tryCt < 15); i = (i + 1) % shuffled.length, tryCt++) {
-          const movie = shuffled[i];
-          if (chosenMovies.find(m => m.movieId === movie.movieId)) continue;
-          // Get character not used already in this question
-          const availChars = movie.characterNames.filter(
-            (char) => !blacklist.has(`${movie.movieId}::${char}`)
-          );
-          if (!availChars.length) continue;
-          const char = availChars[Math.floor(Math.random() * availChars.length)];
-          blacklist.add(`${movie.movieId}::${char}`);
-          chosenMovies.push({ ...movie, clueChar: char });
-        }
-        // Ensure correct number found
-        if (chosenMovies.length < pairsPerQuestion) break;
+      // Step 2: Shuffle pool so we get randomness
+      charMoviePool = charMoviePool.sort(() => 0.5 - Math.random());
 
-        // For each real movie/character, build options: correct + 2 decoys (not from chosen)
-        let allUsedMovieIds = new Set(chosenMovies.map(m => m.movieId));
-        let cluesAndOptions = [];
-        for (let j = 0; j < pairsPerQuestion; j++) {
-          const real = chosenMovies[j];
-          const decoys = poolWithChars
-            .filter(m => !allUsedMovieIds.has(m.movieId))
-            .sort(() => 0.5 - Math.random())
-            .slice(0, 2);
-          decoys.forEach(d => allUsedMovieIds.add(d.movieId));
+      // Step 3: Build questions for the quiz (2 clues/questions per round, 5 rounds = 10 pairs)
+      // Goal: Each [character+movie] used ONCE only (as clue/correct/choice/decoy), no repeats anywhere per session
+      const numQuestions = 5; // rounds
+      const pairsPerQuestion = 2;
+      let usedCharMoviePairs = new Set(); // e.g. "movieId::character"
+      let usedMovieIds = new Set(); // no poster reused as option/decoy
+      let usedCharacterNames = new Set();
+      let usedClues = new Set(); // all clues appeared so far
+
+      let questionsArr = [];
+      let availablePairs = [...charMoviePool];
+
+      // Try up to maxTries for each question to build non-repeating clues/options
+      let maxTries = 30;
+      for (let qIdxInner = 0; qIdxInner < numQuestions; qIdxInner++) {
+        let questionSet = [];
+        let cluesForThisRound = [];
+        let triesLocal = 0;
+
+        while (
+          cluesForThisRound.length < pairsPerQuestion && triesLocal < maxTries
+        ) {
+          // Pick a char-movie pair, not used anywhere yet as a clue/correct/option/decoy
+          const pairIdx = availablePairs.findIndex(
+            p =>
+              !usedCharMoviePairs.has(`${p.movieId}::${p.characterName}`) &&
+              !usedMovieIds.has(p.movieId) &&
+              !usedCharacterNames.has(p.characterName)
+          );
+          if (pairIdx === -1) break;
+          const picked = availablePairs[pairIdx];
+          cluesForThisRound.push(picked);
+          // Mark for global no-reuse
+          usedCharMoviePairs.add(`${picked.movieId}::${picked.characterName}`);
+          usedMovieIds.add(picked.movieId);
+          usedCharacterNames.add(picked.characterName);
+          usedClues.add(`${picked.characterName}::${picked.movieId}`);
+          // Remove this specific pair, but other pairs for unused films could be chosen as distractors for later (unless blocked by usedMovieIds)
+        }
+
+        // If not enough clues for this round, quit
+        if (cluesForThisRound.length < pairsPerQuestion) break;
+
+        // For each clue, pick decoy options (unused movies/posters, not used in any clue or option so far globally)
+        let qItemArray = [];
+        for (let j = 0; j < cluesForThisRound.length; j++) {
+          const real = cluesForThisRound[j];
+          // Decoys: 2 unused char-movie pairs where movie and char both not used globally
+          let decoyOpts = [];
+          let decoyTry = 0;
+          for (
+            let k = 0;
+            decoyOpts.length < 2 && decoyTry < availablePairs.length * 2;
+            k++, decoyTry++
+          ) {
+            const dIdx = (k + Math.floor(Math.random() * availablePairs.length)) % availablePairs.length;
+            const decoy = availablePairs[dIdx];
+
+            // Decoy rules:
+            // -- Do not repeat character, movie, or clue used anywhere before in session (incl. correct answers and other decoys)
+            if (
+              !usedCharMoviePairs.has(`${decoy.movieId}::${decoy.characterName}`) &&
+              !usedMovieIds.has(decoy.movieId) &&
+              !usedCharacterNames.has(decoy.characterName) &&
+              !usedClues.has(`${decoy.characterName}::${decoy.movieId}`) &&
+              decoy.movieId !== real.movieId &&
+              decoy.characterName !== real.characterName &&
+              // Must not already be added as decoy for this clue
+              !decoyOpts.find(
+                e =>
+                  e.movieId === decoy.movieId ||
+                  e.characterName === decoy.characterName
+              )
+            ) {
+              decoyOpts.push(decoy);
+            }
+          }
+          // If not enough decoys, skip this clue round
+          if (decoyOpts.length < 2) break;
+
+          // Mark decoy pairs as used
+          decoyOpts.forEach(d =>
+            usedCharMoviePairs.add(`${d.movieId}::${d.characterName}`)
+          );
+          decoyOpts.forEach(d => usedMovieIds.add(d.movieId));
+          decoyOpts.forEach(d => usedCharacterNames.add(d.characterName));
+          decoyOpts.forEach(d =>
+            usedClues.add(`${d.characterName}::${d.movieId}`)
+          );
+
+          // Options: correct + 2 decoys, shuffled
           const opts = [
             {
               id: real.movieId,
               title: real.title,
               poster: real.poster,
-              isCorrect: true
+              isCorrect: true,
             },
-            ...decoys.map(dc => ({
+            ...decoyOpts.map(dc => ({
               id: dc.movieId,
               title: dc.title,
               poster: dc.poster,
-              isCorrect: false
-            }))
+              isCorrect: false,
+            })),
           ].sort(() => 0.5 - Math.random());
-          cluesAndOptions.push({
-            clue: real.clueChar,
+
+          qItemArray.push({
+            clue: real.characterName,
             correctMovieId: real.movieId,
-            options: opts
+            options: opts,
           });
         }
-        questionsArr.push(cluesAndOptions);
+
+        // If we built enough options for this round, commit the question; otherwise, break (end of possible unique rounds)
+        if (qItemArray.length < pairsPerQuestion) break;
+        questionsArr.push(qItemArray);
       }
+
       setQuestions(questionsArr);
     }
     load();
