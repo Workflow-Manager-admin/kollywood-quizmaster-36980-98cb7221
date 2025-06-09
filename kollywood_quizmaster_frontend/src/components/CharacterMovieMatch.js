@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect } from "react";
 import { fetchTamilMovies, fetchMovieDetails, getTmdbImageUrl } from "../tmdbApi";
 import { useNavigate } from "react-router-dom";
 import BackButton from "./BackButton";
@@ -12,26 +12,24 @@ export default function CharacterMovieMatch() {
   const [questions, setQuestions] = useState([]);
   const [qIdx, setQIdx] = useState(0);
   const [score, setScore] = useState(0);
-  const [afterDrop, setAfterDrop] = useState(false);
-  const [feedback, setFeedback] = useState("");
   const [done, setDone] = useState(false);
-  const [options, setOptions] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [droppedIdx, setDroppedIdx] = useState(null);
+  const [clueStates, setClueStates] = useState([]);
 
   const navigate = useNavigate();
 
+  // Utility: Find N unique clues and options per question (with distinct characters & posters)
   useEffect(() => {
-    // Load 5 questions: each with movie posters and character clues
     async function load() {
-      setLoading(true);
-      // Get 10 random Tamil movies (for more options in pool)
+      // Pool of movies with character info
+      let poolWithChars = [];
+      setQuestions([]);
+      setQIdx(0);
+      setScore(0);
+      setDone(false);
+
+      // Get up to 14 random Tamil movies with poster and at least 1 valid character
       const resp = await fetchTamilMovies({ page: Math.floor(Math.random() * 7) + 2 });
-      let movies = (resp.results || []).filter(
-        (m) => m.id && m.title && m.poster_path
-      );
-      // Get movie details and pick only those with 2+ characters
-      const poolWithChars = [];
+      let movies = (resp.results || []).filter(m => m.id && m.title && m.poster_path);
       for (const film of movies.slice(0, 14)) {
         try {
           const details = await fetchMovieDetails(film.id);
@@ -51,73 +49,133 @@ export default function CharacterMovieMatch() {
         } catch {}
         if (poolWithChars.length > 6) break;
       }
-      // Each question: sample 1 real (+ 2 decoys for options), pick random character from real
+
+      // Each "question" will consist of 2 unique character-movie pairs, each with its own options (1 correct + 2 unique decoys)
+      const pairsPerQuestion = 2;
       const questionsArr = [];
-      const moviePool = [...poolWithChars];
-      for (let k = 0; k < 5 && moviePool.length >= 3; k++) {
-        // Pick correct answer
-        const idx = Math.floor(Math.random() * moviePool.length);
-        const realMovie = moviePool.splice(idx, 1)[0];
-        // Pick random character from real film
-        const charIdx = Math.floor(Math.random() * realMovie.characterNames.length);
-        const clueChar = realMovie.characterNames[charIdx];
+      for (let k = 0; k < 5 && poolWithChars.length >= pairsPerQuestion + 2; k++) {
+        // Pick N unique real movies (no repeats per question)
+        let chosenMovies = [];
+        let blacklist = new Set();
+        // Shuffle pool for fair sampling
+        const shuffled = [...poolWithChars].sort(() => 0.5 - Math.random());
+        for (let i = 0, tryCt = 0; (chosenMovies.length < pairsPerQuestion && tryCt < 15); i = (i + 1) % shuffled.length, tryCt++) {
+          const movie = shuffled[i];
+          if (chosenMovies.find(m => m.movieId === movie.movieId)) continue;
+          // Get character not used already in this question
+          const availChars = movie.characterNames.filter(
+            (char) => !blacklist.has(`${movie.movieId}::${char}`)
+          );
+          if (!availChars.length) continue;
+          const char = availChars[Math.floor(Math.random() * availChars.length)];
+          blacklist.add(`${movie.movieId}::${char}`);
+          chosenMovies.push({ ...movie, clueChar: char });
+        }
+        // Ensure correct number found
+        if (chosenMovies.length < pairsPerQuestion) break;
 
-        // Choose 2 decoy movies
-        const decoyCandidates = moviePool.length >= 2
-          ? moviePool.slice(0, 2)
-          : poolWithChars.filter(m => m.movieId !== realMovie.movieId).slice(0, 2);
-
-        const optionsArr = [
-          {
-            id: realMovie.movieId,
-            title: realMovie.title,
-            poster: realMovie.poster,
-            isCorrect: true,
-          },
-          ...decoyCandidates.map(dc => ({
-            id: dc.movieId,
-            title: dc.title,
-            poster: dc.poster,
-            isCorrect: false,
-          })),
-        ].sort(() => 0.5 - Math.random());
-
-        questionsArr.push({
-          clue: clueChar,
-          correctMovieId: realMovie.movieId,
-          options: optionsArr,
-        });
+        // For each real movie/character, build options: correct + 2 decoys (not from chosen)
+        let allUsedMovieIds = new Set(chosenMovies.map(m => m.movieId));
+        let cluesAndOptions = [];
+        for (let j = 0; j < pairsPerQuestion; j++) {
+          const real = chosenMovies[j];
+          const decoys = poolWithChars
+            .filter(m => !allUsedMovieIds.has(m.movieId))
+            .sort(() => 0.5 - Math.random())
+            .slice(0, 2);
+          decoys.forEach(d => allUsedMovieIds.add(d.movieId));
+          const opts = [
+            {
+              id: real.movieId,
+              title: real.title,
+              poster: real.poster,
+              isCorrect: true
+            },
+            ...decoys.map(dc => ({
+              id: dc.movieId,
+              title: dc.title,
+              poster: dc.poster,
+              isCorrect: false
+            }))
+          ].sort(() => 0.5 - Math.random());
+          cluesAndOptions.push({
+            clue: real.clueChar,
+            correctMovieId: real.movieId,
+            options: opts
+          });
+        }
+        questionsArr.push(cluesAndOptions);
       }
       setQuestions(questionsArr);
-      setQIdx(0);
-      setScore(0);
-      setDone(false);
-      setLoading(false);
-      setAfterDrop(false);
-      setDroppedIdx(null);
-      setFeedback("");
     }
     load();
   }, []);
 
+  // Track per-clue states for each multi-clue question
   useEffect(() => {
-    // When question advances, reset feedback, drop state
-    setAfterDrop(false);
-    setDroppedIdx(null);
-    setFeedback("");
-    if (questions.length && qIdx >= questions.length) {
-      setDone(true);
-    }
-  }, [qIdx, questions.length]);
-
-  useEffect(() => {
-    // When question changes, set its options to state.
-    if (questions.length > qIdx) {
-      setOptions(questions[qIdx]?.options);
+    // Always set clueStates array whenever qIdx or questions changes
+    if (
+      Array.isArray(questions[qIdx]) &&
+      questions[qIdx]
+    ) {
+      setClueStates(
+        questions[qIdx].map(() => ({
+          afterDrop: false,
+          droppedIdx: null,
+          feedback: "",
+        }))
+      );
+    } else {
+      setClueStates([]);
     }
   }, [qIdx, questions]);
 
-  if (loading) {
+  // Handler for clue drag
+  function handleDragStart(i, e) {
+    e.dataTransfer.setData("clueIdx", String(i));
+    e.dataTransfer.effectAllowed = "move";
+  }
+
+  // Handler for option drop
+  function handleDrop(clueIdx, optIdx, e) {
+    e.preventDefault();
+    if (!clueStates[clueIdx] || clueStates[clueIdx].afterDrop) return;
+    const group = questions[qIdx];
+    const chosen = group[clueIdx].options[optIdx];
+    const newClueStates = clueStates.map((state, idx) =>
+      idx !== clueIdx
+        ? state
+        : {
+            afterDrop: true,
+            droppedIdx: optIdx,
+            feedback: chosen.isCorrect
+              ? "🎉 Correct! Drag the remaining clues to continue."
+              : "❌ Not correct. That poster is not the match!",
+          }
+    );
+    setClueStates(newClueStates);
+    if (chosen.isCorrect) setScore((sc) => sc + 1);
+
+    // If all clues dropped, auto-next after delay
+    if (newClueStates.every((st) => st.afterDrop)) {
+      setTimeout(() => {
+        if (qIdx < questions.length - 1) setQIdx(qIdx + 1);
+        else setDone(true);
+      }, 1200);
+    }
+  }
+
+  function handleDragOver(e) {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+  }
+
+  // Calculate number of clues/questions for score display at end
+  let totalQuestions = 0;
+  for (const q of questions) totalQuestions += Array.isArray(q) ? q.length : 1;
+
+  // UI rendering
+  if (!questions.length) {
     return (
       <div className="container">
         <h2>Loading Character-Movie Match…</h2>
@@ -128,12 +186,12 @@ export default function CharacterMovieMatch() {
     return (
       <div className="container">
         <h2>Quiz Complete!</h2>
-        <div>Your Score: {score} / {questions.length}</div>
+        <div>Your Score: {score} / {totalQuestions}</div>
         <button
           className="btn btn-large"
           onClick={() =>
             navigate("/result", {
-              state: { score, total: questions.length },
+              state: { score, total: totalQuestions },
             })
           }
         >
@@ -142,51 +200,11 @@ export default function CharacterMovieMatch() {
       </div>
     );
   }
-  if (!questions.length) {
-    return (
-      <div className="container">
-        <h2>No quiz data available!</h2>
-      </div>
-    );
-  }
 
-  // For current question
-  const question = questions[qIdx];
-  // Optionally make sure clue is only picked once
-  const clue = question.clue;
+  const group = questions[qIdx]; // Array of {clue, correctMovieId, options}
 
-  // Handlers for drag and drop
-  function handleDragStart(e) {
-    e.dataTransfer.setData("clue", clue);
-    e.dataTransfer.effectAllowed = "move";
-  }
-
-  function handleDrop(idx, e) {
-    e.preventDefault();
-    if (afterDrop) return; // Only allow one drop
-    setAfterDrop(true);
-    setDroppedIdx(idx);
-
-    const chosen = options[idx];
-    if (chosen.isCorrect) {
-      setScore((sc) => sc + 1);
-      setFeedback("🎉 Correct! Drag the clue to continue.");
-      setTimeout(() => setQIdx(qIdx + 1), 1000);
-    } else {
-      setFeedback("❌ Not correct. That poster is not the match!");
-    }
-  }
-  function handleDragOver(e) {
-    e.preventDefault();
-    e.dataTransfer.dropEffect = "move";
-  }
-  function handleNext() {
-    setQIdx(qIdx + 1);
-  }
-
-  // === UI output ===
   return (
-    <div className="container" style={{ maxWidth: 670, marginTop: 44 }}>
+    <div className="container" style={{ maxWidth: 700, marginTop: 44 }}>
       <BackButton />
       <div style={{ marginBottom: 12 }}>
         <span className="subtitle" style={{ color: "#fc03e8" }}>
@@ -208,167 +226,167 @@ export default function CharacterMovieMatch() {
         </span>
         <br />
         <span style={{ fontSize: 15, color: "#fc03e8" }}>
-          Tip: Each poster shows a different movie. Can you match the character to their film?
+          Tip: Each poster shows a different movie. Can you match each character to their film?
         </span>
       </div>
-      {/* Draggable Character Name */}
-      <div style={{ display: "flex", justifyContent: "center", marginBottom: 28 }}>
-        {!afterDrop && (
-          <div
-            draggable
-            onDragStart={handleDragStart}
-            style={{
-              fontSize: 26,
-              padding: "18px 44px",
-              background: "#fc03e8",
-              color: "#fff",
-              borderRadius: 12,
-              boxShadow: "0 2px 10px rgba(252,3,232,0.23)",
-              fontWeight: 700,
-              cursor: "grab",
-              userSelect: "none",
-              transition: "transform .18s",
-            }}
-            aria-label="Draggable character clue"
-          >
-            {clue}
-          </div>
-        )}
-        {afterDrop && (
-          <div
-            style={{
-              fontSize: 24,
-              padding: "14px 30px",
-              background: "#ccc",
-              color: "#999",
-              borderRadius: 12,
-              fontWeight: 500,
-              opacity: 0.6,
-              userSelect: "none",
-            }}
-            aria-label="Clue already dropped"
-          >
-            {clue}
-          </div>
-        )}
-      </div>
-      {/* Movie Posters as drop targets */}
-      <div
-        style={{
-          display: "flex",
-          flexWrap: "wrap",
-          gap: 26,
-          justifyContent: "center",
-          alignItems: "end",
-          marginBottom: 6,
-        }}
-      >
-        {options.map((opt, idx) => (
-          <div
-            key={opt.id}
-            onDrop={(e) => handleDrop(idx, e)}
-            onDragOver={handleDragOver}
-            style={{
-              border: `3.5px solid ${
-                afterDrop && droppedIdx === idx
-                  ? (opt.isCorrect ? "#0afc76" : "#fc0361")
-                  : "#fc03e8"
-              }`,
-              borderRadius: 18,
-              boxShadow: "0 0 13px #fc03e8a0",
-              width: 144,
-              marginBottom: 4,
-              background: afterDrop && droppedIdx === idx
-                ? (opt.isCorrect ? "#0fc87518" : "#fc036118")
-                : "#191a24",
-              cursor: afterDrop ? "not-allowed" : "pointer",
-              opacity: afterDrop && droppedIdx !== idx ? 0.48 : 1,
-              position: "relative"
-            }}
-            aria-label={`Movie poster for ${opt.title}`}
-          >
-            <img
-              src={getTmdbImageUrl(opt.poster, "w342")}
-              alt={opt.title}
-              style={{
-                width: 144,
-                height: 216,
-                objectFit: "cover",
-                borderRadius: 16,
-                filter: afterDrop && (!opt.isCorrect && droppedIdx === idx)
-                  ? "grayscale(87%) blur(1.6px)"
-                  : "none",
-                transition: "filter .23s",
-                userSelect: "none",
-                pointerEvents: "none"
-              }}
-              draggable={false}
-            />
+      <div style={{
+        display: "flex",
+        flexDirection: "column",
+        gap: 28,
+        justifyContent: "center"
+      }}>
+        {group.map((qobj, clueIdx) => (
+          <div key={`${qobj.clue}_grp${qIdx}_clue${clueIdx}`}>
+            {/* Draggable Character Name (only name) */}
+            <div style={{ display: "flex", justifyContent: "center", marginBottom: 14 }}>
+              {!clueStates[clueIdx]?.afterDrop && (
+                <div
+                  draggable
+                  onDragStart={e => handleDragStart(clueIdx, e)}
+                  style={{
+                    fontSize: 26,
+                    padding: "18px 44px",
+                    background: "#fc03e8",
+                    color: "#fff",
+                    borderRadius: 12,
+                    boxShadow: "0 2px 10px rgba(252,3,232,0.23)",
+                    fontWeight: 700,
+                    cursor: "grab",
+                    userSelect: "none",
+                    transition: "transform .18s",
+                  }}
+                  aria-label="Draggable character clue"
+                >
+                  {qobj.clue}
+                </div>
+              )}
+              {clueStates[clueIdx]?.afterDrop && (
+                <div
+                  style={{
+                    fontSize: 24,
+                    padding: "14px 30px",
+                    background: "#ccc",
+                    color: "#999",
+                    borderRadius: 12,
+                    fontWeight: 500,
+                    opacity: 0.6,
+                    userSelect: "none",
+                  }}
+                  aria-label="Clue already dropped"
+                >
+                  {qobj.clue}
+                </div>
+              )}
+            </div>
+            {/* Posters group for this clue */}
             <div
               style={{
-                fontWeight: 700,
-                fontSize: 15,
-                color: "#f5f4f0",
-                background: "#fc03e8e6",
-                padding: "5px 5px 3px 5px",
-                borderRadius: "0 0 14px 14px",
-                textAlign: "center",
-                position: "absolute",
-                width: "136px",
-                left: 0,
-                bottom: 0,
-                margin: "0 4px",
+                display: "flex",
+                flexWrap: "wrap",
+                gap: 22,
+                justifyContent: "center",
+                alignItems: "end",
+                marginBottom: 6,
               }}
             >
-              {opt.title}
+              {qobj.options.map((opt, optIdx) => (
+                <div
+                  key={opt.id}
+                  onDrop={e => handleDrop(clueIdx, optIdx, e)}
+                  onDragOver={handleDragOver}
+                  style={{
+                    border: `3.5px solid ${
+                      clueStates[clueIdx]?.afterDrop && clueStates[clueIdx]?.droppedIdx === optIdx
+                        ? (opt.isCorrect ? "#0afc76" : "#fc0361")
+                        : "#fc03e8"
+                    }`,
+                    borderRadius: 18,
+                    boxShadow: "0 0 13px #fc03e8a0",
+                    width: 136,
+                    marginBottom: 4,
+                    background: clueStates[clueIdx]?.afterDrop && clueStates[clueIdx]?.droppedIdx === optIdx
+                      ? (opt.isCorrect ? "#0fc87518" : "#fc036118")
+                      : "#191a24",
+                    cursor: clueStates[clueIdx]?.afterDrop ? "not-allowed" : "pointer",
+                    opacity: clueStates[clueIdx]?.afterDrop && clueStates[clueIdx]?.droppedIdx !== optIdx ? 0.52 : 1,
+                    position: "relative"
+                  }}
+                  aria-label={`Movie poster for ${opt.title}`}
+                >
+                  <img
+                    src={getTmdbImageUrl(opt.poster, "w342")}
+                    alt={opt.title}
+                    style={{
+                      width: 136,
+                      height: 210,
+                      objectFit: "cover",
+                      borderRadius: 15,
+                      filter: clueStates[clueIdx]?.afterDrop &&
+                        (!opt.isCorrect && clueStates[clueIdx]?.droppedIdx === optIdx)
+                        ? "grayscale(87%) blur(1.6px)"
+                        : "none",
+                      transition: "filter .23s",
+                      userSelect: "none",
+                      pointerEvents: "none"
+                    }}
+                    draggable={false}
+                  />
+                  <div
+                    style={{
+                      fontWeight: 700,
+                      fontSize: 15,
+                      color: "#f5f4f0",
+                      background: "#fc03e8e6",
+                      padding: "5px 5px 3px 5px",
+                      borderRadius: "0 0 14px 14px",
+                      textAlign: "center",
+                      position: "absolute",
+                      width: "122px",
+                      left: 0,
+                      bottom: 0,
+                      margin: "0 7px",
+                    }}
+                  >
+                    {opt.title}
+                  </div>
+                  {clueStates[clueIdx]?.afterDrop && clueStates[clueIdx]?.droppedIdx === optIdx && (
+                    <span
+                      style={{
+                        position: "absolute",
+                        top: 7,
+                        right: 8,
+                        fontSize: 32,
+                        color: opt.isCorrect ? "#0afc76" : "#fc0361",
+                        filter: "drop-shadow(0 2px 3px #222)",
+                        zIndex: 4
+                      }}
+                      role="img"
+                      aria-label={opt.isCorrect ? "Correct" : "Incorrect"}
+                    >
+                      {opt.isCorrect ? "✓" : "✗"}
+                    </span>
+                  )}
+                </div>
+              ))}
             </div>
-            {/* Show correct/incorrect checkmark after drop */}
-            {afterDrop && droppedIdx === idx && (
-              <span
-                style={{
-                  position: "absolute",
-                  top: 7,
-                  right: 8,
-                  fontSize: 38,
-                  color: opt.isCorrect ? "#0afc76" : "#fc0361",
-                  filter: "drop-shadow(0 2px 3px #222)",
-                  zIndex: 4
-                }}
-                role="img"
-                aria-label={opt.isCorrect ? "Correct" : "Incorrect"}
-              >
-                {opt.isCorrect ? "✓" : "✗"}
-              </span>
-            )}
+            <div style={{
+              margin: "10px 0 18px 0", minHeight: 32,
+              color: clueStates[clueIdx]?.afterDrop
+                ? (qobj.options[clueStates[clueIdx]?.droppedIdx]?.isCorrect ? "#0afc76" : "#fc0361")
+                : "#f5f4f0",
+              fontWeight: 600,
+              fontSize: 17
+            }}>
+              {clueStates[clueIdx]?.feedback}
+            </div>
           </div>
         ))}
       </div>
-      {/* Feedback and Next */}
-      <div style={{
-        margin: "25px 0 2px 0", minHeight: 36,
-        color: afterDrop
-          ? (droppedIdx !== null && options[droppedIdx]?.isCorrect ? "#0afc76" : "#fc0361")
-          : "#f5f4f0",
-        fontWeight: 600,
-        fontSize: 18
-      }}>
-        {feedback}
+      <div style={{ color: "#fc03e8", fontWeight: 700, marginTop: 12, textAlign: "center" }}>
+        {clueStates.every(st => st.afterDrop)
+          ? "Nice! Moving to next..."
+          : "Match all clues before next question."}
       </div>
-      {afterDrop && (
-        <div>
-          {(qIdx < questions.length - 1) ? (
-            <button className="btn btn-large"
-              style={{ background: "#fc03e8", color: "#fff", marginTop: 10 }}
-              onClick={handleNext}
-            >Next Question</button>
-          ) : (
-            <button className="btn btn-large"
-              style={{ background: "#fc03e8", color: "#fff", marginTop: 10 }}
-              onClick={() => setDone(true)}
-            >See Results</button>
-          )}
-        </div>
-      )}
     </div>
   );
 }
