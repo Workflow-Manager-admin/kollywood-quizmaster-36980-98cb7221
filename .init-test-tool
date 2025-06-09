@@ -1,0 +1,4 @@
+{
+    "command": "npm run test",
+    "working_directory": "/home/kavia/workspace/code-generation/kollywood-quizmaster-36980-98cb7221/kollywood_quizmaster_frontend"
+}
