@@ -135,6 +135,8 @@ export default function BlurredPosterQuiz() {
       setScore(score + 1);
       setRevealed(true);
       setAnswerShown(true);
+      // Move to next quiz immediately after correct answer
+      setTimeout(() => { nextQuestion(); }, 500);
     } else {
       setFeedback("❌ Try again, or reveal the answer.");
     }
@@ -157,6 +159,8 @@ export default function BlurredPosterQuiz() {
     setAnswerShown(true);
     setRevealed(true);
     setFeedback(`💡 The answer is: ${(movie.displayTitle || movie.engTitle || "")}`);
+    // Move to next quiz after revealing answer
+    setTimeout(() => { nextQuestion(); }, 1250);
   }
 
   function handleShowClue(i) {

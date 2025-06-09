@@ -75,6 +75,7 @@ export default function SpinTheWheel() {
       setScore(score + 1);
       setFeedback("👍 Correct!");
       setReveal(true);
+      setTimeout(() => { next(); }, 500);
     } else {
       setFeedback("Try again, or reveal the answer.");
     }
@@ -83,6 +84,7 @@ export default function SpinTheWheel() {
   function revealAnswer() {
     setReveal(true);
     setFeedback(`The answer was: ${question?.answer}`);
+    setTimeout(() => { next(); }, 1250);
   }
 
   function next() {

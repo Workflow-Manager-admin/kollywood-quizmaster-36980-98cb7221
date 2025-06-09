@@ -91,6 +91,7 @@ export default function CastCombo() {
         setFeedback("✅ Correct!");
         setScore(score + 1);
         setReveal(true);
+        setTimeout(() => { next(); }, 500);
       } else {
         setFeedback("Try again, or reveal the answer.");
       }
@@ -99,6 +100,7 @@ export default function CastCombo() {
         setFeedback("👏 That's right!");
         setScore(score + 1);
         setReveal(true);
+        setTimeout(() => { next(); }, 500);
       } else {
         setFeedback("Try again, or reveal the answer.");
       }
@@ -117,6 +119,7 @@ export default function CastCombo() {
     setFeedback(q.type === "combo"
       ? `The answer is: ${q.correct}`
       : `The answer is: ${q.answer} (not in ${q.movie})`);
+    setTimeout(() => { next(); }, 1250);
   }
 
   return (
