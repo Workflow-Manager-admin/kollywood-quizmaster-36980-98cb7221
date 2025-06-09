@@ -32,11 +32,136 @@ export default function CharacterMovieMatch() {
       setDone(false);
 
       try {
-        // Step 1: Build a big flat pool of unique character-movie pairs from many movies
+        // Static fallback pool: known Tamil movies/characters/posters
+        const FALLBACK_CHAR_MOVIE_POOL = [
+          {
+            characterName: "Arunachalam",
+            movieId: 9736,
+            poster: "/tQotpWimZTrUfxkbLaYGhvIfVvQ.jpg",
+            title: "Arunachalam",
+          },
+          {
+            characterName: "Chitti",
+            movieId: 74812,
+            poster: "/5PL6mDfQW2LaxhUJQ6nU5zTh0ac.jpg",
+            title: "Enthiran",
+          },
+          {
+            characterName: "Vasool Raja",
+            movieId: 236115,
+            poster: "/8kE6pHKH5qdXZ0HBPwIp6uo1JiV.jpg",
+            title: "Vasool Raja MBBS",
+          },
+          {
+            characterName: "Duraisingam",
+            movieId: 36586,
+            poster: "/jHSPf4JkA7tnO4STPuxtuX2tZ1N.jpg",
+            title: "Singam",
+          },
+          {
+            characterName: "Thamizhselvan",
+            movieId: 41384,
+            poster: "/zFl30L7cWt1Aag2zqLN4M9Ch5nw.jpg",
+            title: "Iruvar",
+          },
+          {
+            characterName: "Remo",
+            movieId: 407709,
+            poster: "/s4p6zCyvQ3xBou1d1u9hTflU2WX.jpg",
+            title: "Remo",
+          },
+          {
+            characterName: "Muralishwaran",
+            movieId: 78574,
+            poster: "/98XxiU8negEeGph4dWlevFIPEKV.jpg",
+            title: "Kushi",
+          },
+          {
+            characterName: "Nallasivam",
+            movieId: 61020,
+            poster: "/vGcH4FfW3JNIokX4OVtwN8pH0eU.jpg",
+            title: "Anbe Sivam",
+          },
+          {
+            characterName: "Velu Naicker",
+            movieId: 20666,
+            poster: "/qlfIYYQJv8DGE6Btfk9QAZfV1XI.jpg",
+            title: "Nayakan",
+          },
+          {
+            characterName: "Super Subramani",
+            movieId: 86777,
+            poster: "/n8j3iQKDexBdBAqCJQxm00rt1k8.jpg",
+            title: "Boss Engira Bhaskaran",
+          },
+          {
+            characterName: "Saroja",
+            movieId: 145106,
+            poster: "/eZy5jp2ftGddbRZTsaaQeIMN9vr.jpg",
+            title: "Saroja",
+          },
+          {
+            characterName: "Kaali",
+            movieId: 38148,
+            poster: "/lY5UfP8UOoVBVcB4J0gta78A7zb.jpg",
+            title: "Kaali",
+          },
+          {
+            characterName: "Manickam",
+            movieId: 15793,
+            poster: "/jMuask0aXkQoaJ2kA316N0qI4sm.jpg",
+            title: "Baashha",
+          },
+          {
+            characterName: "Kumudha",
+            movieId: 31752,
+            poster: "/szHCbEMbZ1kB7lpyT2tV4AvbwHK.jpg",
+            title: "Sillunu Oru Kaadhal",
+          },
+          {
+            characterName: "Parattai",
+            movieId: 102068,
+            poster: "/wospfgZ4LV0e4pb1dlRJ1IkhT4w.jpg",
+            title: "16 Vayathinile",
+          },
+          {
+            characterName: "Shankar",
+            movieId: 23967,
+            poster: "/xtEA1zXUUQmQ2Oyxo3urQgolu2d.jpg",
+            title: "Jeans",
+          },
+          {
+            characterName: "Iyarkkai",
+            movieId: 49982,
+            poster: "/sQ1iEFpr8e0QHHJbcaCsHmt7tjg.jpg",
+            title: "Iyarkkai",
+          },
+          {
+            characterName: "Kokki Kumar",
+            movieId: 40089,
+            poster: "/ggQqzGq3F3zDbMTmyTtZYpYdHV2.jpg",
+            title: "Pudhupettai",
+          },
+          {
+            characterName: "Auto Raja",
+            movieId: 88903,
+            poster: "/nmhN3fQ1D0w2mh7Zy8y3nSQPQQF.jpg",
+            title: "Auto Raja",
+          },
+          {
+            characterName: "Sathyamoorthy",
+            movieId: 24865,
+            poster: "/sJK3A3zjbvGcEu95H96A95F4AVc.jpg",
+            title: "Aboorva Sagodharargal",
+          }
+        ];
+
+        // Step 1: Try to gather character-movie pairs from TMDB API
         let charMoviePool = [];
         let checkedMovieIds = new Set();
         let tries = 0;
-        for (let page = 1; page < 7 && charMoviePool.length < 20 && tries < 70; page++, tries++) {
+
+        for (let page = 1; page < 7 && charMoviePool.length < 20 && tries < 80; page++, tries++) {
           try {
             const resp = await fetchTamilMovies({ page: (Math.floor(Math.random() * 7) + 1) });
             let movies = (resp.results || []).filter(m => m.id && m.title && m.poster_path);
@@ -77,17 +202,30 @@ export default function CharacterMovieMatch() {
           if (charMoviePool.length >= 20) break;
         }
 
-        if (charMoviePool.length < 10) {
-          setQuestions([]);
-          setError("Sorry, not enough unique character/movie pairs could be generated for this quiz.");
-          setLoading(false);
-          return;
+        // Step 2: Supplement pool with fallback if not enough pairs found
+        if (charMoviePool.length < 12) {
+          // Add only new/unseen pairs from fallback.
+          const shuffle = arr => arr.map(v => [Math.random(), v]).sort((a,b)=>a[0]-b[0]).map(x=>x[1]);
+          let takenSoFar = new Set(charMoviePool.map(
+            e => `${e.characterName?.toLowerCase()?.trim() || ""}::${e.title?.toLowerCase()?.trim() || ""}`
+          ));
+          let poolAdd = shuffle(FALLBACK_CHAR_MOVIE_POOL).filter(e =>
+            !takenSoFar.has(`${e.characterName.toLowerCase().trim()}::${e.title.toLowerCase().trim()}`)
+          );
+          for (let i = 0; charMoviePool.length < 20 && i < poolAdd.length; ++i) {
+            charMoviePool.push(poolAdd[i]);
+          }
         }
 
-        // Step 2: Shuffle pool so we get randomness
+        // Step 3: If for any reason still not enough, use fallback entirely
+        if (charMoviePool.length < 10) {
+          charMoviePool = [...FALLBACK_CHAR_MOVIE_POOL];
+        }
+
+        // Step 4: Shuffle pool so we get randomness
         charMoviePool = charMoviePool.sort(() => 0.5 - Math.random());
 
-        // Step 3: Build questions (2 clues/questions per round, 5 rounds = 10 pairs)
+        // Step 5: Build questions (2 pairs per question, 5 rounds)
         const numQuestions = 5;
         const pairsPerQuestion = 2;
         let usedCharMoviePairs = new Set();
@@ -118,6 +256,7 @@ export default function CharacterMovieMatch() {
             usedMovieIds.add(picked.movieId);
             usedCharacterNames.add(picked.characterName);
             usedClues.add(`${picked.characterName}::${picked.movieId}`);
+            triesLocal++;
           }
 
           if (cluesForThisRound.length < pairsPerQuestion) break;
@@ -190,6 +329,7 @@ export default function CharacterMovieMatch() {
           if (questionsArr.length > 0) {
             setQuestions(questionsArr);
           } else {
+            // Should never occur due to fallback logic above, but just in case
             setQuestions([]);
             setError("Sorry, couldn't generate sufficient quiz questions. Please try again.");
           }
@@ -198,7 +338,7 @@ export default function CharacterMovieMatch() {
       } catch (err) {
         if (!abort) {
           setQuestions([]);
-          setError("Loading failed: Unable to generate questions. Please check your connection and try again.");
+          setError("Unexpected error: Could not load quiz. Please refresh or contact support!");
           setLoading(false);
         }
       }
