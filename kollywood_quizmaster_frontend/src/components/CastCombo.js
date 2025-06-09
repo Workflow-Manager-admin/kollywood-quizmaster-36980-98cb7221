@@ -84,6 +84,11 @@ export default function CastCombo() {
 
   const q = questions[qIdx];
 
+  // Ideally in full implementation we'd use a movie poster or relevant image;
+  // Here we simulate an image UI to be blurred on submit/reveal.
+  // For pure logic, this is demo -- adjust as needed if real image available.
+  // We'll use a demo image for visual context.
+
   function submit(e) {
     e.preventDefault();
     if (q.type === "combo") {
@@ -129,6 +134,22 @@ export default function CastCombo() {
         <span className="subtitle" style={{ color: "#fc03e8" }}>
           Cast Combo: Q{qIdx + 1} / {questions.length}
         </span>
+      </div>
+      {/* Demo static image, normally this would come from TMDB if available per question */}
+      <div style={{ textAlign: "center", marginBottom: 16 }}>
+        <img
+          src="https://upload.wikimedia.org/wikipedia/commons/1/14/No_Image_Available.jpg"
+          alt="Combo visual"
+          style={{
+            width: 120,
+            height: 180,
+            borderRadius: 10,
+            objectFit: "cover",
+            boxShadow: "0 0 9px #fc03e8",
+            filter: reveal ? "blur(11px)" : "none",
+            transition: "filter 0.22s"
+          }}
+        />
       </div>
       <div style={{
         margin: "12px 0", color: "#f5f4f0", fontWeight: 600

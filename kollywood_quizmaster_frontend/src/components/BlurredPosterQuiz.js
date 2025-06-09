@@ -184,10 +184,11 @@ export default function BlurredPosterQuiz() {
           alt="Movie Poster"
           style={{
             borderRadius: 14,
-            filter: "blur(12px)",
+            filter: revealed || answerShown ? "blur(12px)" : "none",
             maxWidth: "90%",
             boxShadow: "0 0 14px #fc03e8",
             marginBottom: 6,
+            transition: "filter 0.22s",
           }}
         />
       </div>

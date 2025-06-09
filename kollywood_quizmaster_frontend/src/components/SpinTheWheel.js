@@ -124,6 +124,22 @@ export default function SpinTheWheel() {
           marginTop: 20, marginBottom: 20, background: "#0a0000", border: "2px solid #fc03e8",
           borderRadius: 16, padding: 22
         }}>
+          {/* Demo placeholder image that becomes blurred after submit or reveal */}
+          <div style={{ textAlign: "center", marginBottom: 12 }}>
+            <img
+              src="https://upload.wikimedia.org/wikipedia/commons/1/14/No_Image_Available.jpg"
+              alt="Spin card"
+              style={{
+                width: 120,
+                height: 180,
+                objectFit: "cover",
+                borderRadius: 12,
+                boxShadow: "0 0 9px #fc03e8",
+                filter: reveal ? "blur(11px)" : "none",
+                transition: "filter 0.22s"
+              }}
+            />
+          </div>
           <div>
             <b>Actor:</b> {question?.actor || "?"}
           </div>
