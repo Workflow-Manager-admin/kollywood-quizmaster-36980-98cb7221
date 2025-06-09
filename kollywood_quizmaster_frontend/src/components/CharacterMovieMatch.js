@@ -797,17 +797,22 @@ export default function CharacterMovieMatch() {
                   aria-label={`Movie poster for ${opt.title}`}
                 >
                   <img
-                    src={getTmdbImageUrl(opt.poster, "w342")}
+                    src={
+                      opt.poster
+                        ? getTmdbImageUrl(opt.poster, "w342")
+                        : "https://upload.wikimedia.org/wikipedia/commons/1/14/No_Image_Available.jpg"
+                    }
                     alt={opt.title}
                     style={{
                       width: 136,
                       height: 210,
                       objectFit: "cover",
                       borderRadius: 15,
-                      filter: clueStates[clueIdx]?.afterDrop &&
+                      filter:
+                        clueStates[clueIdx]?.afterDrop &&
                         (!opt.isCorrect && clueStates[clueIdx]?.droppedIdx === optIdx)
-                        ? "grayscale(87%) blur(1.6px)"
-                        : "none",
+                          ? "grayscale(87%) blur(1.6px)"
+                          : "none",
                       transition: "filter .23s",
                       userSelect: "none",
                       pointerEvents: "none"
