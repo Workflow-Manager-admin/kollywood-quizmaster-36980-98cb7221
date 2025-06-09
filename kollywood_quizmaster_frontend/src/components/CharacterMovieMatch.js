@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { fetchTamilMovies, fetchMovieDetails } from "../tmdbApi";
 import { useNavigate } from "react-router-dom";
-
+import BackButton from "./BackButton";
 /**
  * PUBLIC_INTERFACE
  * Character-Movie Match: Drag character names to the correct movie slots.
@@ -87,6 +87,7 @@ export default function CharacterMovieMatch() {
 
   return (
     <div className="container" style={{ maxWidth: 480, marginTop: 44 }}>
+      <BackButton />
       <div style={{ marginBottom: 16 }}>
         <span className="subtitle" style={{ color: "#fc03e8" }}>
           Character-Movie Match: Q{qIdx + 1} / {questions.length}

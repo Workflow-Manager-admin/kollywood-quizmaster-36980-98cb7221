@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { fetchTamilMovies, fetchMovieDetails } from "../tmdbApi";
 import { useNavigate } from "react-router-dom";
+import BackButton from "./BackButton";
 
 /**
  * PUBLIC_INTERFACE
@@ -95,6 +96,7 @@ export default function SpinTheWheel() {
   if (!movies.length) return <div className="container"><h2>Loading Spin the Wheel…</h2></div>;
   if (done) return (
     <div className="container">
+      <BackButton />
       <h2>Spin the Wheel Complete!</h2>
       <div>
         Your Score: {score} / 10
@@ -107,6 +109,7 @@ export default function SpinTheWheel() {
 
   return (
     <div className="container" style={{ maxWidth: 460, marginTop: 44 }}>
+      <BackButton />
       <h2 className="subtitle" style={{ color: "#fc03e8" }}>
         Spin the Wheel! ({turn + 1} / 10)
       </h2>

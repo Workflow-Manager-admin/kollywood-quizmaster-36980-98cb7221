@@ -1,5 +1,6 @@
 import React from "react";
 import { useLocation, useNavigate } from "react-router-dom";
+import BackButton from "./BackButton";
 
 /**
  * PUBLIC_INTERFACE
@@ -13,6 +14,7 @@ export default function QuizResult() {
 
   return (
     <div className="container" style={{ maxWidth: 460, marginTop: 70 }}>
+      <BackButton label="Back to Quiz" />
       <h2 style={{ color: "#fc03e8", marginBottom: 22 }}>Quiz Complete!</h2>
       <div style={{ fontWeight: 600, fontSize: 32, marginBottom: 12, color: "#0a0000", background: "#f5f4f0", borderRadius: 12, padding: 18 }}>
         {score} / {total}

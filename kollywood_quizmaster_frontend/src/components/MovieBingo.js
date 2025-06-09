@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { fetchTamilMovies, fetchMovieDetails } from "../tmdbApi";
 import { useNavigate } from "react-router-dom";
+import BackButton from "./BackButton";
 
 /**
  * PUBLIC_INTERFACE
@@ -70,6 +71,7 @@ export default function MovieBingo() {
 
   return (
     <div className="container" style={{ marginTop: 44 }}>
+      <BackButton />
       <h2 className="subtitle" style={{ color: "#fc03e8" }}>
         Movie Bingo (Pick a movie for each category)
       </h2>

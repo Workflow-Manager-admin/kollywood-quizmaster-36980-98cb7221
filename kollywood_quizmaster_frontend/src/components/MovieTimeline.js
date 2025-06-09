@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { fetchTamilMovies, fetchMovieDetails } from "../tmdbApi";
 import { useNavigate } from "react-router-dom";
+import BackButton from "./BackButton";
 
 /**
  * PUBLIC_INTERFACE
@@ -68,6 +69,7 @@ export default function MovieTimeline() {
   if (done) {
     return (
       <div className="container">
+        <BackButton />
         <h2>Timeline Complete!</h2>
         <div>
           You got {score} out of {movies.length} in correct order!
@@ -81,6 +83,7 @@ export default function MovieTimeline() {
 
   return (
     <div className="container" style={{ marginTop: 44, maxWidth: 520 }}>
+      <BackButton />
       <h2 className="subtitle" style={{ color: "#fc03e8" }}>
         Arrange the movies in order of release (top=earliest)
       </h2>

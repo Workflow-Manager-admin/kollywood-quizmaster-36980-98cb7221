@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { fetchTamilMovies, fetchMovieDetails } from "../tmdbApi";
 import { useNavigate } from "react-router-dom";
+import BackButton from "./BackButton";
 
 /**
  * PUBLIC_INTERFACE
@@ -120,6 +121,7 @@ export default function CastCombo() {
 
   return (
     <div className="container" style={{ maxWidth: 460, marginTop: 44 }}>
+      <BackButton />
       <div style={{ marginBottom: 15 }}>
         <span className="subtitle" style={{ color: "#fc03e8" }}>
           Cast Combo: Q{qIdx + 1} / {questions.length}
