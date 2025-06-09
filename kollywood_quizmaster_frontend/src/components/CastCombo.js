@@ -146,7 +146,8 @@ export default function CastCombo() {
             borderRadius: 10,
             objectFit: "cover",
             boxShadow: "0 0 9px #fc03e8",
-            filter: reveal ? "blur(11px)" : "none",
+            // Only show unblurred after submit/reveal
+            filter: !reveal ? "blur(11px)" : "none",
             transition: "filter 0.22s"
           }}
         />

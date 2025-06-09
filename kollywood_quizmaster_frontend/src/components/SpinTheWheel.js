@@ -135,7 +135,8 @@ export default function SpinTheWheel() {
                 objectFit: "cover",
                 borderRadius: 12,
                 boxShadow: "0 0 9px #fc03e8",
-                filter: reveal ? "blur(11px)" : "none",
+                // Blur by default, show image after submit/reveal
+                filter: !reveal ? "blur(11px)" : "none",
                 transition: "filter 0.22s"
               }}
             />

@@ -184,7 +184,8 @@ export default function BlurredPosterQuiz() {
           alt="Movie Poster"
           style={{
             borderRadius: 14,
-            filter: revealed || answerShown ? "blur(12px)" : "none",
+            // Blur image initially, remove blur after submit/reveal
+            filter: !(revealed || answerShown) ? "blur(12px)" : "none",
             maxWidth: "90%",
             boxShadow: "0 0 14px #fc03e8",
             marginBottom: 6,
